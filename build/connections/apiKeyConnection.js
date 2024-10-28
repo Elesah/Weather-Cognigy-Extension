@@ -13,7 +13,7 @@ exports.apiKeyConnection = void 0;
  */
 exports.apiKeyConnection = {
     type: "api-key",
-    label: "Holds the api-key for a Cognigy.AI v4 API request.",
+    label: "Accu Weather api key",
     fields: [
         { fieldName: "key" }
     ]

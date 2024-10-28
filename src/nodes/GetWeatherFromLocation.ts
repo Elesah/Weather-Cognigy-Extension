@@ -6,6 +6,8 @@ export interface IWeatherParams extends INodeFunctionBaseParams {
 		connection: {
 			key: string;
 		}
+		city: string;
+		country: string;
 		location: string;
 	};
 }
@@ -25,57 +27,97 @@ export const GetWeatherFromLocationNode = createNodeDescriptor({
 				required: true
 			}
         },
-
 		{
             key: "location",
-            label: "Weather in this ciry",
+            label: "Weather in this city",
             type: "cognigyText",
             description: "Please add a city here"
         },
+
 		{
-			key: "location",
+			key: "country",
 			type: "select",
-			label: "Select with Option Resolvers",
-			description: "Dynmically loads information from an API when the Background Selector above is changed",
+			label: "Select country",
 			optionsResolver: {
 				dependencies: ["connection"],
 				resolverFunction: async ({ api, config }) => {
-				  // fetch list of files using http request
-				  const response = await api.httpRequest({
-					method: "GET",
-					url: `http://dataservice.accuweather.com/locations/v1/cities/autocomplete?apikey=${config.connection.key}&q=${config.location}`,
-				  });
 
-				  console.log(JSON.stringify(response.data, null, 2));
+					try {
+							const response = await api.httpRequest({
+								method: "get",
+								url: `https://restcountries.com/v3.1/all`,
 
-				  // map file list to "options array"
-				  return response.data.map((location) => {
-					return {
-					  city: location.LocalizedName
-					};
-				  });
+							});
+							return response?.data.map((country) => {
+									return {
+										label: country.name.common,
+										value: country.name.common
+									};
+								});
+					} catch (error) {
+						console.log(error);
+						throw new Error(error);
+					}
 				},
-			  },
-		}
+			},
+		},
 
+		{
+			key: "city",
+			type: "select",
+			label: "Select location",
+			optionsResolver: {
+				dependencies: ["connection", "country"],
+				resolverFunction: async ({ api, config }) => {
+
+					try {
+							const response = await api.httpRequest({
+								method: "post",
+								url: `https://countriesnow.space/api/v0.1/countries/cities`,
+								headers: {
+									"Content-Type": "application/json",
+								},
+								data: {
+										"country": config.country
+								}
+					});
+							console.log(response.data);
+
+							return response?.data?.data.map((city) => {
+									return {
+										label: city,
+										value: city
+									};
+								});
+					} catch (error) {
+						console.log(error);
+						throw new Error(error);
+					}
+				},
+			},
+		}
     ],
 	function: async ({ cognigy, config }: IWeatherParams) => {
 		const { api } = cognigy;
-		const { connection, location } = config;
-		const response = await axios.get(`http://dataservice.accuweather.com/locations/v1/cities/search?apikey=${connection.key}&q=${location}`);
-			api.output(connection.key);
-			api.output(location);
+		let { connection, city, country, location} = config;
+		let cityToBeFound;
 
-		const cityCodesArray = response.data.map((location) => {
-			return {
-			  cityCode: location.Key
-			};
-		}
-		);
-
-		for (let cityCode of cityCodesArray) {
-			const response = await axios.get(
-				`http://dataservice.accuweather.com/forecasts/v1/daily/1day/${cityCode.cityCode}?apikey=${connection.key}`);
-			api.output(`Today it will be a ${response.data.Headline.Text} with a minimum temperature of ${response.data.DailyForecasts[0].Temperature.Minimum.Value} F and a maximum of ${response.data.DailyForecasts[0].Temperature.Maximum.Value}`);
-		}
-}});
+		try {
+			const responseCities = await axios.get(`http://dataservice.accuweather.com/locations/v1/cities/search?apikey=${connection.key}&q=${location}`);
+			for (let foundCity of responseCities.data) {
+				if (foundCity.Country.EnglishName === country) {
+					cityToBeFound = foundCity;
+				}
+			}
+			if (!cityToBeFound) {
+				cityToBeFound = location;
+			}
+			if (cityToBeFound) {
+				const responseForecast = await axios.get(
+					`http://dataservice.accuweather.com/forecasts/v1/daily/1day/${cityToBeFound.Key}?apikey=${connection.key}`);
+				api.output(`Today it will be a ${responseForecast.data?.Headline.Text} with a minimum temperature of ${responseForecast.data?.DailyForecasts[0].Temperature.Minimum.Value} F and a maximum of ${responseForecast.data.DailyForecasts[0].Temperature.Maximum.Value}`);
+			}
+			} catch (error) {
+				api.log('error', error.message);
+			}
+	}});
