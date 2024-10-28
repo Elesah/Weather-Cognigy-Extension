@@ -8,7 +8,6 @@ export interface IWeatherParams extends INodeFunctionBaseParams {
 		}
 		city: string;
 		country: string;
-		location: string;
 	};
 }
 
@@ -28,13 +27,6 @@ export const GetWeatherFromLocationNode = createNodeDescriptor({
 			}
         },
 		{
-            key: "location",
-            label: "Weather in this city",
-            type: "cognigyText",
-            description: "Please add a city here"
-        },
-
-		{
 			key: "country",
 			type: "select",
 			label: "Select country",
@@ -45,13 +37,13 @@ export const GetWeatherFromLocationNode = createNodeDescriptor({
 					try {
 							const response = await api.httpRequest({
 								method: "get",
-								url: `https://restcountries.com/v3.1/all`,
+								url: `https://countriesnow.space/api/v0.1/countries/positions`,
 
 							});
-							return response?.data.map((country) => {
+							return response?.data?.data?.map((country) => {
 									return {
-										label: country.name.common,
-										value: country.name.common
+										label: country.name,
+										value: country.name
 									};
 								});
 					} catch (error) {
@@ -67,7 +59,7 @@ export const GetWeatherFromLocationNode = createNodeDescriptor({
 			type: "select",
 			label: "Select location",
 			optionsResolver: {
-				dependencies: ["connection", "country"],
+				dependencies: ["country"],
 				resolverFunction: async ({ api, config }) => {
 
 					try {
@@ -99,18 +91,15 @@ export const GetWeatherFromLocationNode = createNodeDescriptor({
     ],
 	function: async ({ cognigy, config }: IWeatherParams) => {
 		const { api } = cognigy;
-		let { connection, city, country, location} = config;
+		let { connection, city, country} = config;
 		let cityToBeFound;
 
 		try {
-			const responseCities = await axios.get(`http://dataservice.accuweather.com/locations/v1/cities/search?apikey=${connection.key}&q=${location}`);
+			const responseCities = await axios.get(`http://dataservice.accuweather.com/locations/v1/cities/search?apikey=${connection.key}&q=${city}`);
 			for (let foundCity of responseCities.data) {
 				if (foundCity.Country.EnglishName === country) {
 					cityToBeFound = foundCity;
 				}
-			}
-			if (!cityToBeFound) {
-				cityToBeFound = location;
 			}
 			if (cityToBeFound) {
 				const responseForecast = await axios.get(

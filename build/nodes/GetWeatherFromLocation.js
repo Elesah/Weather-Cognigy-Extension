@@ -19,27 +19,22 @@ exports.GetWeatherFromLocationNode = (0, extension_tools_1.createNodeDescriptor)
             }
         },
         {
-            key: "location",
-            label: "Weather in this city",
-            type: "cognigyText",
-            description: "Please add a city here"
-        },
-        {
             key: "country",
             type: "select",
             label: "Select country",
             optionsResolver: {
                 dependencies: ["connection"],
                 resolverFunction: async ({ api, config }) => {
+                    var _a, _b;
                     try {
                         const response = await api.httpRequest({
                             method: "get",
-                            url: `https://restcountries.com/v3.1/all`,
+                            url: `https://countriesnow.space/api/v0.1/countries/positions`,
                         });
-                        return response === null || response === void 0 ? void 0 : response.data.map((country) => {
+                        return (_b = (_a = response === null || response === void 0 ? void 0 : response.data) === null || _a === void 0 ? void 0 : _a.data) === null || _b === void 0 ? void 0 : _b.map((country) => {
                             return {
-                                label: country.name.common,
-                                value: country.name.common
+                                label: country.name,
+                                value: country.name
                             };
                         });
                     }
@@ -55,7 +50,7 @@ exports.GetWeatherFromLocationNode = (0, extension_tools_1.createNodeDescriptor)
             type: "select",
             label: "Select location",
             optionsResolver: {
-                dependencies: ["connection", "country"],
+                dependencies: ["country"],
                 resolverFunction: async ({ api, config }) => {
                     var _a;
                     try {
@@ -88,17 +83,14 @@ exports.GetWeatherFromLocationNode = (0, extension_tools_1.createNodeDescriptor)
     function: async ({ cognigy, config }) => {
         var _a, _b;
         const { api } = cognigy;
-        let { connection, city, country, location } = config;
+        let { connection, city, country } = config;
         let cityToBeFound;
         try {
-            const responseCities = await axios_1.default.get(`http://dataservice.accuweather.com/locations/v1/cities/search?apikey=${connection.key}&q=${location}`);
+            const responseCities = await axios_1.default.get(`http://dataservice.accuweather.com/locations/v1/cities/search?apikey=${connection.key}&q=${city}`);
             for (let foundCity of responseCities.data) {
                 if (foundCity.Country.EnglishName === country) {
                     cityToBeFound = foundCity;
                 }
-            }
-            if (!cityToBeFound) {
-                cityToBeFound = location;
             }
             if (cityToBeFound) {
                 const responseForecast = await axios_1.default.get(`http://dataservice.accuweather.com/forecasts/v1/daily/1day/${cityToBeFound.Key}?apikey=${connection.key}`);
