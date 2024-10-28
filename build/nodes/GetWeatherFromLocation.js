@@ -5,7 +5,7 @@ const extension_tools_1 = require("@cognigy/extension-tools");
 const axios_1 = require("axios");
 exports.GetWeatherFromLocationNode = (0, extension_tools_1.createNodeDescriptor)({
     type: "GetWeatherFromLocation",
-    defaultLabel: "Get Weather From Locations",
+    defaultLabel: "Get Weather for a location",
     summary: "Returns weather for a certain location",
     fields: [
         {
@@ -22,6 +22,9 @@ exports.GetWeatherFromLocationNode = (0, extension_tools_1.createNodeDescriptor)
             key: "country",
             type: "select",
             label: "Select country",
+            params: {
+                required: true
+            },
             optionsResolver: {
                 dependencies: ["connection"],
                 resolverFunction: async ({ api, config }) => {
@@ -39,18 +42,20 @@ exports.GetWeatherFromLocationNode = (0, extension_tools_1.createNodeDescriptor)
                         });
                     }
                     catch (error) {
-                        console.log(error);
                         throw new Error(error);
                     }
                 },
             },
         },
         {
-            key: "city",
+            key: "location",
             type: "select",
             label: "Select location",
+            params: {
+                required: true
+            },
             optionsResolver: {
-                dependencies: ["country"],
+                dependencies: ["connection", "country"],
                 resolverFunction: async ({ api, config }) => {
                     var _a;
                     try {
@@ -64,7 +69,6 @@ exports.GetWeatherFromLocationNode = (0, extension_tools_1.createNodeDescriptor)
                                 "country": config.country
                             }
                         });
-                        console.log(response.data);
                         return (_a = response === null || response === void 0 ? void 0 : response.data) === null || _a === void 0 ? void 0 : _a.data.map((city) => {
                             return {
                                 label: city,
@@ -73,7 +77,9 @@ exports.GetWeatherFromLocationNode = (0, extension_tools_1.createNodeDescriptor)
                         });
                     }
                     catch (error) {
-                        console.log(error);
+                        if (!config.country) {
+                            throw new Error("Please select a country!");
+                        }
                         throw new Error(error);
                     }
                 },
@@ -81,20 +87,28 @@ exports.GetWeatherFromLocationNode = (0, extension_tools_1.createNodeDescriptor)
         }
     ],
     function: async ({ cognigy, config }) => {
-        var _a, _b;
+        var _a, _b, _c, _d, _e, _f;
         const { api } = cognigy;
-        let { connection, city, country } = config;
-        let cityToBeFound;
+        let { connection, location, country } = config;
+        let cityToBeFound = null;
         try {
-            const responseCities = await axios_1.default.get(`http://dataservice.accuweather.com/locations/v1/cities/search?apikey=${connection.key}&q=${city}`);
+            const responseCities = await axios_1.default.get(`http://dataservice.accuweather.com/locations/v1/cities/search?apikey=${connection.key}&q=${location}`);
+            api.output(responseCities.statusText);
             for (let foundCity of responseCities.data) {
                 if (foundCity.Country.EnglishName === country) {
                     cityToBeFound = foundCity;
+                    break;
                 }
             }
+            api.output(cityToBeFound.LocalizedName);
+            api.output(cityToBeFound.Key);
             if (cityToBeFound) {
-                const responseForecast = await axios_1.default.get(`http://dataservice.accuweather.com/forecasts/v1/daily/1day/${cityToBeFound.Key}?apikey=${connection.key}`);
-                api.output(`Today it will be a ${(_a = responseForecast.data) === null || _a === void 0 ? void 0 : _a.Headline.Text} with a minimum temperature of ${(_b = responseForecast.data) === null || _b === void 0 ? void 0 : _b.DailyForecasts[0].Temperature.Minimum.Value} F and a maximum of ${responseForecast.data.DailyForecasts[0].Temperature.Maximum.Value}`);
+                const responseForecast = await axios_1.default.get(`http://dataservice.accuweather.com/forecasts/v1/daily/1day/${cityToBeFound.Key}?apikey=${connection.key}&details=true&metric=true`);
+                api.output(responseForecast.statusText);
+                api.output(`The weather today in ${location}, ${country} will be ${(_a = responseForecast.data) === null || _a === void 0 ? void 0 : _a.DailyForecasts[0].Day.ShortPhrase.toLowerCase()} during the day ` +
+                    `and ${(_b = responseForecast.data) === null || _b === void 0 ? void 0 : _b.DailyForecasts[0].Night.ShortPhrase.toLowerCase()} during the night, with a minimum temperature of ` +
+                    `${(_c = responseForecast.data) === null || _c === void 0 ? void 0 : _c.DailyForecasts[0].Temperature.Minimum.Value}° ${(_d = responseForecast.data) === null || _d === void 0 ? void 0 : _d.DailyForecasts[0].Temperature.Minimum.Unit} and a ` +
+                    `maximum temperature of ${(_e = responseForecast.data) === null || _e === void 0 ? void 0 : _e.DailyForecasts[0].Temperature.Maximum.Value}° ${(_f = responseForecast.data) === null || _f === void 0 ? void 0 : _f.DailyForecasts[0].Temperature.Maximum.Unit}`);
             }
         }
         catch (error) {
