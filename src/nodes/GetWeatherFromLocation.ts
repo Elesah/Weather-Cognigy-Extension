@@ -41,6 +41,11 @@ export const GetWeatherFromLocationNode = createNodeDescriptor({
 		try {
 
 			const responseCities = await axios.get(`http://dataservice.accuweather.com/locations/v1/cities/search?apikey=${connection.key}&q=${location}&details=true`);
+			if (responseCities.data.length === 0) {
+				api.output("This city does not exist.");
+				return;
+
+			}
 
 			for (let foundCity of responseCities.data) { // we can have multiple cities with the same name
 					cityCountryMap.set(foundCity.Key, foundCity.Country.LocalizedName);
@@ -58,7 +63,6 @@ export const GetWeatherFromLocationNode = createNodeDescriptor({
 				}
 
 		} catch (error) {
-				api.output("I can't help you with the weather in this city");
 				api.log('error', error.message);
 		}
 	}
