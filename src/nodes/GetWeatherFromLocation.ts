@@ -7,7 +7,6 @@ export interface IWeatherParams extends INodeFunctionBaseParams {
 			key: string;
 		}
 		location: string;
-		country: string;
 	};
 }
 
@@ -27,102 +26,39 @@ export const GetWeatherFromLocationNode = createNodeDescriptor({
 			}
         },
 		{
-			key: "country",
-			type: "select",
-			label: "Select country",
-			params: {
-				required: true
-			},
-			optionsResolver: {
-				dependencies: ["connection"],
-				resolverFunction: async ({ api, config }) => {
-					try {
-							const response = await api.httpRequest({
-								method: "get",
-								url: `https://countriesnow.space/api/v0.1/countries/positions`,
-						});
-							return response?.data?.data?.map((country) => {
-								return {
-									label: country.name,
-									value: country.name
-								};
-							});
-					} catch (error) {
-						throw new Error(error);
-					}
-				},
-			},
-		},
-
-		{
-			key: "location",
-			type: "select",
-			label: "Select location",
-			params: {
-				required: true
-			},
-			optionsResolver: {
-				dependencies: ["connection", "country"],
-				resolverFunction: async ({ api, config }) => {
-
-					try {
-							const response = await api.httpRequest({
-								method: "post",
-								url: `https://countriesnow.space/api/v0.1/countries/cities`,
-								headers: {
-									"Content-Type": "application/json",
-								},
-								data: {
-										"country": config.country
-								}
-							});
-							return response?.data?.data.map((city) => {
-									return {
-										label: city,
-										value: city
-									};
-								});
-					} catch (error) {
-						if (!config.country) {
-							throw new Error("Please select a country!");
-						}
-						throw new Error(error);
-					}
-				},
-			},
-		}
+            key: "location",
+            label: "Weather in this city",
+            type: "cognigyText",
+            description: "Please write a city name here"
+        },
     ],
 	function: async ({ cognigy, config }: IWeatherParams) => {
 		const { api } = cognigy;
-		let { connection, location, country} = config;
-		let cityToBeFound = null;
+		let { connection, location} = config;
+		let cityCountryMap: Map<number, string> = new Map<number, string>();
+
 
 		try {
 
-			const responseCities = await axios.get(`http://dataservice.accuweather.com/locations/v1/cities/search?apikey=${connection.key}&q=${location}`);
-			api.output(responseCities.statusText);
-			for (let foundCity of responseCities.data) {
-				if (foundCity.Country.EnglishName === country) {
-					cityToBeFound = foundCity;
-					break;
+			const responseCities = await axios.get(`http://dataservice.accuweather.com/locations/v1/cities/search?apikey=${connection.key}&q=${location}&details=true`);
+
+			for (let foundCity of responseCities.data) { // we can have multiple cities with the same name
+					cityCountryMap.set(foundCity.Key, foundCity.Country.LocalizedName);
 				}
-			}
-			api.output(cityToBeFound.LocalizedName);
-			api.output(cityToBeFound.Key);
 
-			if (cityToBeFound) {
+			for (let cityKey of cityCountryMap.keys()) {
 				const responseForecast = await axios.get(
-					`http://dataservice.accuweather.com/forecasts/v1/daily/1day/${cityToBeFound.Key}?apikey=${connection.key}&details=true&metric=true`);
-					api.output(responseForecast.statusText);
+					`http://dataservice.accuweather.com/forecasts/v1/daily/1day/${cityKey}?apikey=${connection.key}&details=true&metric=true`);
 
-
-				api.output(`The weather today in ${location}, ${country} will be ${responseForecast.data?.DailyForecasts[0].Day.ShortPhrase.toLowerCase()} during the day ` +
+					api.output(`The weather today in ${location}, ${cityCountryMap.get(cityKey)} will be ${responseForecast.data?.DailyForecasts[0].Day.ShortPhrase.toLowerCase()} during the day ` +
 							`and ${responseForecast.data?.DailyForecasts[0].Night.ShortPhrase.toLowerCase()} during the night, the minimum temperature will be of ` +
 							`${responseForecast.data?.DailyForecasts[0].Temperature.Minimum.Value}° ${responseForecast.data?.DailyForecasts[0].Temperature.Minimum.Unit} and the ` +
-							`maximum temperature of ${responseForecast.data?.DailyForecasts[0].Temperature.Maximum.Value}° ${responseForecast.data?.DailyForecasts[0].Temperature.Maximum.Unit}.`
+							`maximum temperature of ${responseForecast.data?.DailyForecasts[0].Temperature.Maximum.Value}° ${responseForecast.data?.DailyForecasts[0].Temperature.Maximum.Unit}.` + `\n`
 						);
-			}
+				}
+
 		} catch (error) {
+				api.output("I can't help you with the weather in this city");
 				api.log('error', error.message);
 		}
 	}
