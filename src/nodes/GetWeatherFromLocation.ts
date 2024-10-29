@@ -63,6 +63,7 @@ export const GetWeatherFromLocationNode = createNodeDescriptor({
 				}
 
 		} catch (error) {
+				api.output("There was an issue with getting the weather for this city");
 				api.log('error', error.message);
 		}
 	}
